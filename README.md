@@ -3,7 +3,7 @@
 A lightweight autoplayer [userscript](https://greasyfork.org/en/scripts/590318-autoverse) for pianoverse.net.
 
 ## Note
-Not affiliated with pianoverse.net. Use at your own risk.
+Not affiliated with [Pianoverse](https://github.com/charleprr). Use at your own risk.
 
 
 <img width="715" height="488" alt="image" src="https://github.com/user-attachments/assets/e163170c-a26b-47cf-9231-31f914b7d755" />
