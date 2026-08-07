@@ -1,6 +1,12 @@
 # Autoverse v2.3.0
 
-A lightweight autoplayer userscript for pianoverse.net.
+A lightweight autoplayer [userscript](https://greasyfork.org/en/scripts/590318-autoverse) for pianoverse.net.
+
+## Note
+Not affiliated with pianoverse.net. Use at your own risk.
+
+
+<img width="715" height="488" alt="image" src="https://github.com/user-attachments/assets/e163170c-a26b-47cf-9231-31f914b7d755" />
 
 ## Features
 
@@ -16,6 +22,9 @@ A lightweight autoplayer userscript for pianoverse.net.
 - Built-in sheets browser (vp-sheets.arijan.dev)
 - Remembers your panel position, size, sheet, and settings
 
+## Requirements
+- A userscript manager (Tampermonkey recommended)
+- Works on Chromium browsers and Firefox
 
 ## Installation Methods
 
@@ -79,6 +88,11 @@ q w e r t y
 - How many times to repeat each key (lags you a lot with a lower-quality PC)
 
 Everything gets saved automatically. (Sheets, MIDI, etc.)
+
+## Troubleshooting
+- Panel not showing? Make sure the script is enabled and refresh the page!
+- MIDI not loading? Try a different .mid file or check the octave shift!
+- Keys not registering? Increase the "repeat each key" setting!! 
 
 ## License
 
