@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Autoverse
 // @namespace    https://youtube.com/@Temptastrophe
-// @version      2.3.0
+// @version      2.3.1
 // @description  Autoverse, a lightweight autoplayer for pianoverse.net
 // @author       Temptastrophe
 // @match        *://pianoverse.net/*
