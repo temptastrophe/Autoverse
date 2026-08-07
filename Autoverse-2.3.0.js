@@ -7,7 +7,7 @@
 // @match        *://pianoverse.net/*
 // @match        *://pianoverse.net/?r=*//
 // @license      Apache-2.0
-// @icon         https://cdn.discordapp.com/attachments/1440670696232587398/1490902531163947008/image0.jpg
+// @icon         https://avatars.githubusercontent.com/u/314318981?v=4
 // @grant        none
 // ==/UserScript==
 
