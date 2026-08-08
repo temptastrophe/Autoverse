@@ -1,4 +1,4 @@
-# Autoverse v2.3.0
+# - Autoverse - 
 
 A lightweight autoplayer [userscript](https://greasyfork.org/en/scripts/590318-autoverse) for pianoverse.net.
 
