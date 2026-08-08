@@ -48,7 +48,7 @@ limitations under the License.
         hotkeys: {
             toggleGui: ['F8'],
             manual: ['='],
-            midithrottle: ['🏠'],
+            midithrottle: ['Home'],
             autoplay: ['-'],
             loadmidi: [']'],
             reset: ["'"],
