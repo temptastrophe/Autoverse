@@ -2,7 +2,7 @@
 
 A lightweight autoplayer [userscript](https://greasyfork.org/en/scripts/590318-autoverse) for **[Pianoverse](https://pianoverse.net/)**.  
 
-**[Download](https://github.com/temptastrophe/Autoverse/tree/main#autoverse-code)**
+**[Download](https://github.com/temptastrophe/Autoverse/tree/main#installation)**
 
 <img width="715" height="488" alt="image" src="https://github.com/user-attachments/assets/e163170c-a26b-47cf-9231-31f914b7d755" />
 
