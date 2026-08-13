@@ -1,4 +1,4 @@
-# - Autoverse - 
+# - Autoverse -
 
 A lightweight autoplayer [userscript](https://greasyfork.org/en/scripts/590318-autoverse) for pianoverse.net.
 
@@ -7,6 +7,17 @@ Not affiliated with [Pianoverse](https://github.com/charleprr). Use at your own 
 
 
 <img width="715" height="488" alt="image" src="https://github.com/user-attachments/assets/e163170c-a26b-47cf-9231-31f914b7d755" />
+
+## Changelog
+
+### v3.0
+- Added live theme matching: Autoverse now follows whatever theme you're using on Pianoverse and updates instantly
+- Added note sustain: hold Left Shift while playing to keep notes held down longer (configurable in Settings)
+- Added sheet highlighter: current token is highlighted and the sheet auto-scrolls as you play (works in both Play and Manual)
+- Fixed minimize: the panel now properly collapses instead of leaving a giant empty box
+- Fixed MIDI Sheet switching so the highlighter comes back after loading a MIDI file
+- Removed all hotkeys (they were causing room for error)
+- General UI polish and QOL fixes.
 
 ## Features
 
@@ -17,10 +28,14 @@ Not affiliated with [Pianoverse](https://github.com/charleprr). Use at your own 
 - Transposing up/down
 - Loop sheet/MIDI option
 - Key repeat (for when the site is being stubborn :p)
-- Hotkeys (Non-Customizable as of right now, sadly.)
-- Integrated into the toolbar on the site.
+- Sheet highlighter that shows the current token and auto-scrolls as you play :)
+- Hold Left Shift to sustain notes longer
+- Automatic theme matching (follows the site's built-in themes)
+- Integration into the toolbar on the site
 - Built-in sheets browser (vp-sheets.arijan.dev)
 - Remembers your panel position, size, sheet, and settings
+- Autoplayer Minimization
+
 
 ## Requirements
 - A userscript manager (Tampermonkey recommended)
@@ -48,18 +63,19 @@ The panel and toolbar button should show up automatically.
 
 ## How to use
 
-- **F8** or the Autoverse button in the toolbar → open/close the panel
-- **Play** button or `-` → start/stop
-- **Manual** button or `=` → step through one note/group at a time
-- **Throttle** button or `Home` → step through MIDI while keeping timing
-- **Load MIDI** or `]` → pick a .mid file
-- **Reset** or `'` → go back to the start
-- `.` and `,` → transpose up/down
+- Autoverse button in the toolbar → open/close the panel
+- **Play** → start/stop sheet or MIDI
+- **Manual** → step through one note/group at a time
+- **Throttle** → step through MIDI while keeping timing
+- **Load MIDI** → pick a .mid file
+- **Reset** → go back to the start
+- **-1 / +1** → transpose down/up
+- Hold **Left Shift** while playing to sustain notes longer
 
 ### Sheet format
 
-q w e r t y
-[q w e] {r t y}
+q w e r t y  
+[q w e] {r t y}  
 [qwe] {rty} 1 2 3
 
 ### Sheet Formatting Info
@@ -67,32 +83,21 @@ q w e r t y
 `[...]` plays notes at the same time.  
 `{...}` plays them with a small delay between each.
 
-
-## Hotkeys
-
-  Key     | What it does          
-|---------|-----------------------|
-  "F8"    | Toggle the panel      
-  "-"     | Play / Stop           
-  "="     | Manual mode           
-"Home"    | Throttle mode         
-  "]"     | Load MIDI             
-  "'"     | Reset                 
-  "."     | Transpose +1          
-  ","     | Transpose -1          
-
 ## Customizable Stuff
 
 - BPM (only affects sheets, MIDI keeps its own tempo)
 - Loop
-- How many times to repeat each key (lags you a lot with a lower-quality PC)
+- How many times to repeat each key
+- Normal hold time
+- Shift hold (sustain) time
 
-Everything gets saved automatically. (Sheets, MIDI, etc.)
+Everything gets saved automatically.
 
 ## Troubleshooting
 - Panel not showing? Make sure the script is enabled and refresh the page!
 - MIDI not loading? Try a different .mid file or check the octave shift!
-- Keys not registering? Increase the "repeat each key" setting!! 
+- Keys not registering? Increase the "repeat each key" setting!!
+- Theme not matching? Just change the theme in Pianoverse settings. It should update within a second :))
 
 ## License
 
