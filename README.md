@@ -2,6 +2,8 @@
 
 A lightweight autoplayer [userscript](https://greasyfork.org/en/scripts/590318-autoverse) for **[Pianoverse](https://pianoverse.net/)**.  
 
+**[Download](https://github.com/temptastrophe/Autoverse/edit/main/README.md#autoverse-code)**
+
 <img width="715" height="488" alt="image" src="https://github.com/user-attachments/assets/e163170c-a26b-47cf-9231-31f914b7d755" />
 
 ## Changelog
@@ -60,8 +62,52 @@ A lightweight autoplayer [userscript](https://greasyfork.org/en/scripts/590318-a
 
 1. Install Tampermonkey
 2. Create a new script
-3. Paste the full Autoverse code
+3. Paste the full Autoverse code (see below this message)
 4. Save and open pianoverse.net
+
+### AUTOVERSE CODE
+
+```js
+// ==UserScript==
+// @name         Autoverse
+// @namespace    https://youtube.com/@Temptastrophe
+// @version      3.0.1
+// @description  Autoverse, a lightweight autoplayer for pianoverse.net
+// @author       Temptastrophe
+// @match        *://pianoverse.net/*
+// @match        *://pianoverse.net/?r=*//
+// @license      Apache-2.0
+// @icon         https://avatars.githubusercontent.com/u/314318981?v=4
+// @grant        none
+// @downloadURL https://update.greasyfork.org/scripts/590318/Autoverse.user.js
+// @updateURL https://update.greasyfork.org/scripts/590318/Autoverse.meta.js
+// ==/UserScript==
+
+/*
+Copyright 2026 Temptastrophe
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://apache.org
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+(function() {
+    'use strict';
+
+    fetch('https://raw.githubusercontent.com/temptastrophe/Autoverse/refs/heads/main/index.js')
+        .then(r => r.text())
+        .then(code => {eval(code);});
+})();
+```
+
 
 ## How to use
 
