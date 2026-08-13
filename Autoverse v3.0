@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Autoverse
 // @namespace    https://youtube.com/@Temptastrophe
-// @version      2.3.2
+// @version      3.0.0
 // @description  Autoverse, a lightweight autoplayer for pianoverse.net
 // @author       Temptastrophe
 // @match        *://pianoverse.net/*
@@ -9,6 +9,8 @@
 // @license      Apache-2.0
 // @icon         https://avatars.githubusercontent.com/u/314318981?v=4
 // @grant        none
+// @downloadURL https://update.greasyfork.org/scripts/590318/Autoverse.user.js
+// @updateURL https://update.greasyfork.org/scripts/590318/Autoverse.meta.js
 // ==/UserScript==
 
 /*
@@ -37,6 +39,7 @@ limitations under the License.
 
     const config = {
         release: 35,
+        sustain: 220,
         caps: true,
         type: 'down',
         utype: 'up',
@@ -44,19 +47,7 @@ limitations under the License.
         times: 1,
         times_time: 12,
         shift: true,
-        curlbracket_time: 90,
-        hotkeys: {
-            toggleGui: ['F8'],
-            manual: ['='],
-            midithrottle: ['Home'],
-            autoplay: ['-'],
-            loadmidi: [']'],
-            reset: ["'"],
-            set: [';'],
-            transposeUp: ['.'],
-            transposeDown: [','],
-            times: ['\\']
-        }
+        curlbracket_time: 90
     };
 
     let sheets = '';
@@ -75,6 +66,9 @@ limitations under the License.
     let midiThrottleLastAt = 0;
     let midiAutoIdx = 0;
     let midiStart = 0;
+
+    let shiftHeld = false;
+    let lastAppliedTheme = '';
 
     function beaut(s) {
         if (!s) return '';
@@ -250,10 +244,12 @@ limitations under the License.
                 bubbles: true
             };
 
+            const hold = shiftHeld ? config.sustain : config.release;
+
             document.dispatchEvent(new KeyboardEvent('key' + config.type, base));
             setTimeout(() => {
                 document.dispatchEvent(new KeyboardEvent('key' + config.utype, base));
-            }, config.release);
+            }, hold);
         }, time);
     }
 
@@ -308,6 +304,7 @@ limitations under the License.
         }
         setStatus('Stopped');
         updateButtons();
+        updateSheetHighlight();
     }
 
     function startSheetAutoplay() {
@@ -319,10 +316,13 @@ limitations under the License.
             setStatus('No sheet loaded');
             return;
         }
+        midiQueue = null;
+        midiSteps = null;
         currentDelay = Math.round(60000 / lastBPM);
         autoplayRunning = true;
-        setStatus('Playing sheet @ ' + lastBPM + ' BPM');
+        setStatus('Playing');
         updateButtons();
+        updateSheetHighlight();
 
         (function step() {
             if (!autoplayRunning) return;
@@ -331,6 +331,7 @@ limitations under the License.
                     autoplayRunning = false;
                     setStatus('Finished');
                     updateButtons();
+                    updateSheetHighlight();
                     return;
                 }
             }
@@ -350,8 +351,9 @@ limitations under the License.
         midiAutoIdx = 0;
         autoplayRunning = true;
         midiStart = performance.now();
-        setStatus('Playing MIDI…');
+        setStatus('Playing MIDI');
         updateButtons();
+        updateSheetHighlight();
         midiAutoStep();
     }
 
@@ -360,6 +362,7 @@ limitations under the License.
             autoplayRunning = false;
             setStatus(midiAutoIdx >= midiQueue.length ? 'MIDI finished' : 'Stopped');
             updateButtons();
+            updateSheetHighlight();
             return;
         }
         const elapsed = performance.now() - midiStart;
@@ -435,7 +438,7 @@ limitations under the License.
                     midiAutoIdx = 0;
                     midiThrottlePending = false;
                     midiThrottleLastAt = 0;
-                    setStatus('MIDI: ' + file.name + ' (' + midiQueue.length + ' notes / ' + midiSteps.length + ' steps)');
+                    setStatus('MIDI: ' + file.name + ' (' + midiQueue.length + ' notes)');
                     updateProgress();
                     updateButtons();
                 } catch (ex) {
@@ -449,6 +452,15 @@ limitations under the License.
         inp.click();
     }
 
+    function clearMidi() {
+        midiQueue = null;
+        midiSteps = null;
+        midiThrottleIndex = 0;
+        midiAutoIdx = 0;
+        midiThrottlePending = false;
+        midiThrottleLastAt = 0;
+    }
+
     function resetAll() {
         current = 0;
         midiAutoIdx = 0;
@@ -460,7 +472,6 @@ limitations under the License.
         updateProgress();
     }
 
-    // localstorage junk so the panel remembers where you left it
     const VP_STORE_KEY = 'vpAutoplayerUIState_v2';
 
     function saveUIState() {
@@ -474,7 +485,7 @@ limitations under the License.
                 left: gui ? gui.style.left : null,
                 top: gui ? gui.style.top : null,
                 width: gui ? gui.style.width : null,
-                height: gui ? gui.style.height : null
+                height: gui && !gui.classList.contains('minimized') ? gui.style.height : null
             }));
         } catch (e) {}
     }
@@ -488,36 +499,180 @@ limitations under the License.
         }
     }
 
-    function readableHotkeyName(name) {
-        return name
-            .replace(/([A-Z])/g, ' $1')
-            .replace(/^./, c => c.toUpperCase())
-            .trim();
-    }
-
-    function keyLabel(k) {
-        return k === ' ' ? 'Space' : k;
-    }
-
-    function renderHotkeyList() {
-        return Object.entries(config.hotkeys).map(([name, keys]) => {
-            const label = readableHotkeyName(name);
-            const combo = keys.map(k => '<kbd>' + keyLabel(k) + '</kbd>').join(' / ');
-            return '<div class="vp-hk-row"><span>' + label + '</span><span class="vp-hk-keys">' + combo + '</span></div>';
-        }).join('');
+    function esc(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
     const SHEETS_SITE = 'vp-sheets.arijan.dev';
     const SHEETS_URL = 'https://vp-sheets.arijan.dev/index/';
-    const FOOTER_HTML = '<div class="hint">v2.3 · Made with 💛 by <a href="https://www.youtube.com/@Temptastrophe" target="_blank" rel="noopener noreferrer"><b>Temptastrophe</b></a></div>';
+    const FOOTER_HTML = '<div class="hint">v3.0 · Made with 💛 by <a href="https://www.youtube.com/@Temptastrophe" target="_blank" rel="noopener noreferrer"><b>Temptastrophe</b></a></div>';
+
+    // theme colors pulled from the site
+    const THEME_MAP = {
+        carbon: {
+            dark: true,
+            bg0: 'rgb(12, 13, 20)',
+            bg1: 'rgb(16, 17, 25)',
+            bg2: 'rgb(22, 23, 32)',
+            bg3: 'rgb(28, 29, 40)',
+            ink: '#eef0f5',
+            inkDim: '#888c9a',
+            brass: '#b6903f',
+            brassBright: '#d8b568'
+        },
+        crimson: {
+            dark: true,
+            bg0: 'rgb(16, 8, 8)',
+            bg1: 'rgb(22, 12, 12)',
+            bg2: 'rgb(30, 16, 16)',
+            bg3: 'rgb(38, 20, 20)',
+            ink: '#f5eef0',
+            inkDim: '#9a888c',
+            brass: '#c47a4a',
+            brassBright: '#e0a070'
+        },
+        forest: {
+            dark: true,
+            bg0: 'rgb(12, 14, 12)',
+            bg1: 'rgb(16, 20, 16)',
+            bg2: 'rgb(22, 28, 22)',
+            bg3: 'rgb(28, 36, 28)',
+            ink: '#eef5ee',
+            inkDim: '#889a88',
+            brass: '#8a9e4f',
+            brassBright: '#b0c86a'
+        },
+        violet: {
+            dark: true,
+            bg0: 'rgb(13, 12, 15)',
+            bg1: 'rgb(18, 16, 22)',
+            bg2: 'rgb(26, 22, 32)',
+            bg3: 'rgb(34, 28, 42)',
+            ink: '#f0eef5',
+            inkDim: '#8c889a',
+            brass: '#9a7ab8',
+            brassBright: '#b89ad0'
+        },
+        cream: {
+            dark: false,
+            bg0: 'rgb(253, 249, 244)',
+            bg1: 'rgb(250, 245, 238)',
+            bg2: 'rgb(245, 238, 228)',
+            bg3: 'rgb(238, 230, 218)',
+            ink: '#2a241c',
+            inkDim: '#6b5e4e',
+            brass: '#9a7a3a',
+            brassBright: '#b89040'
+        },
+        sage: {
+            dark: false,
+            bg0: 'rgb(242, 247, 242)',
+            bg1: 'rgb(235, 242, 235)',
+            bg2: 'rgb(225, 235, 225)',
+            bg3: 'rgb(212, 226, 212)',
+            ink: '#1e2a1e',
+            inkDim: '#4e6b4e',
+            brass: '#6a8a4a',
+            brassBright: '#88a85a'
+        },
+        rose: {
+            dark: false,
+            bg0: 'rgb(253, 245, 244)',
+            bg1: 'rgb(250, 238, 236)',
+            bg2: 'rgb(245, 228, 226)',
+            bg3: 'rgb(238, 216, 214)',
+            ink: '#2a1c1e',
+            inkDim: '#6b4e52',
+            brass: '#b06a6a',
+            brassBright: '#c88888'
+        },
+        slate: {
+            dark: false,
+            bg0: 'rgb(243, 245, 249)',
+            bg1: 'rgb(236, 239, 245)',
+            bg2: 'rgb(226, 230, 240)',
+            bg3: 'rgb(214, 220, 232)',
+            ink: '#1c1e2a',
+            inkDim: '#4e526b',
+            brass: '#6a7a9a',
+            brassBright: '#8898b8'
+        }
+    };
 
     let gui, statusEl, statusDotEl, progressEl, progressLabelEl, sheetArea, bpmInput, bpmSlider,
-        loopCheck, timesInput, clockEl, charCountEl, keystripEl;
+        loopCheck, timesInput, clockEl, charCountEl, keystripEl, sheetHighlight;
     let sheetsIframe = null;
     let sheetsTabLoaded = false;
     let activeTab = 'player';
     let tabButtons = {};
     let tabPanels = {};
+
+    function applyTheme(themeName) {
+        if (!gui) return;
+        if (themeName === lastAppliedTheme) return;
+        lastAppliedTheme = themeName;
+
+        const t = THEME_MAP[themeName] || THEME_MAP.carbon;
+
+        gui.style.setProperty('--bg-0', t.bg0);
+        gui.style.setProperty('--bg-1', t.bg1);
+        gui.style.setProperty('--bg-2', t.bg2);
+        gui.style.setProperty('--bg-3', t.bg3);
+        gui.style.setProperty('--ink', t.ink);
+        gui.style.setProperty('--ink-dim', t.inkDim);
+        gui.style.setProperty('--brass', t.brass);
+        gui.style.setProperty('--brass-bright', t.brassBright);
+
+        if (t.dark) {
+            gui.style.setProperty('--felt', '#1f9d55');
+            gui.style.setProperty('--felt-bright', '#2ecc71');
+            gui.style.setProperty('--red-felt', '#e0505c');
+            gui.style.setProperty('--line', 'rgba(255,255,255,0.08)');
+            gui.style.setProperty('--line-soft', 'rgba(255,255,255,0.05)');
+        } else {
+            gui.style.setProperty('--felt', '#1a8a48');
+            gui.style.setProperty('--felt-bright', '#22b35c');
+            gui.style.setProperty('--red-felt', '#c04050');
+            gui.style.setProperty('--line', 'rgba(0,0,0,0.10)');
+            gui.style.setProperty('--line-soft', 'rgba(0,0,0,0.06)');
+        }
+    }
+
+    function getSiteTheme() {
+        // site puts data-theme on the <body>
+        const body = document.body;
+        if (body && body.getAttribute('data-theme')) {
+            return body.getAttribute('data-theme');
+        }
+        // fallback just in case
+        const html = document.documentElement;
+        if (html && html.getAttribute('data-theme')) {
+            return html.getAttribute('data-theme');
+        }
+        return 'carbon';
+    }
+
+    function watchTheme() {
+        // poll every 50ms so it updates the second the user changes theme
+        setInterval(() => {
+            applyTheme(getSiteTheme());
+        }, 50);
+
+        // also watch with mutation observer for good measure
+        const target = document.body || document.documentElement;
+        if (target) {
+            const obs = new MutationObserver(() => {
+                applyTheme(getSiteTheme());
+            });
+            obs.observe(target, { attributes: true, attributeFilter: ['data-theme', 'style'] });
+        }
+
+        // apply whatever is current right now
+        applyTheme(getSiteTheme());
+    }
 
     function switchTab(id) {
         if (!tabButtons[id] || !tabPanels[id]) return;
@@ -559,9 +714,9 @@ limitations under the License.
                 position: fixed;
                 top: 80px;
                 right: 20px;
-                width: 340px;
-                min-width: 300px;
-                min-height: 300px;
+                width: 360px;
+                min-width: 320px;
+                min-height: 340px;
                 resize: both;
                 overflow: hidden;
                 display: flex;
@@ -578,7 +733,11 @@ limitations under the License.
                 z-index: 999999;
                 user-select: none;
             }
-            #vp-autoplayer-gui.minimized { min-height: 0; resize: none; }
+            #vp-autoplayer-gui.minimized {
+                height: auto !important;
+                min-height: 0 !important;
+                resize: none;
+            }
             #vp-autoplayer-gui.minimized .vp-tabs,
             #vp-autoplayer-gui.minimized .vp-body { display: none; }
             #vp-autoplayer-gui * { box-sizing: border-box; }
@@ -591,7 +750,7 @@ limitations under the License.
 
             #vp-autoplayer-gui .vp-header {
                 background: linear-gradient(180deg, rgba(242,234,217,0.05), transparent);
-                padding: 10px 12px 8px;
+                padding: 12px 14px 10px;
                 cursor: grab;
                 display: flex;
                 align-items: center;
@@ -600,23 +759,22 @@ limitations under the License.
                 flex-shrink: 0;
             }
             #vp-autoplayer-gui .vp-header:active { cursor: grabbing; }
-            #vp-autoplayer-gui .vp-title-wrap { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+            #vp-autoplayer-gui .vp-title-wrap { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
             #vp-autoplayer-gui .vp-clef {
                 font-family: Georgia, 'Times New Roman', serif;
-                font-size: 20px;
+                font-size: 22px;
                 color: var(--brass);
                 line-height: 1;
                 flex-shrink: 0;
             }
             #vp-autoplayer-gui .vp-title {
                 font-family: Georgia, 'Times New Roman', serif;
-                font-size: 14.5px;
+                font-size: 16px;
                 letter-spacing: 0.2px;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
             }
-            #vp-autoplayer-gui .vp-title b { color: var(--brass-bright); font-weight: 600; }
             #vp-autoplayer-gui .vp-mini-dot {
                 display: none;
                 width: 7px; height: 7px; border-radius: 50%;
@@ -630,9 +788,9 @@ limitations under the License.
                 background: transparent;
                 border: none;
                 color: var(--ink-dim);
-                font-size: 14px;
+                font-size: 15px;
                 cursor: pointer;
-                width: 22px; height: 22px;
+                width: 24px; height: 24px;
                 border-radius: 5px;
                 line-height: 1;
             }
@@ -640,7 +798,7 @@ limitations under the License.
 
             #vp-autoplayer-gui .vp-keystrip {
                 display: flex;
-                height: 5px;
+                height: 6px;
                 flex-shrink: 0;
                 border-bottom: 1px solid var(--line);
             }
@@ -664,7 +822,7 @@ limitations under the License.
             #vp-autoplayer-gui .vp-tabs {
                 display: flex;
                 gap: 2px;
-                padding: 8px 10px 0;
+                padding: 10px 12px 0;
                 border-bottom: 1px solid var(--line-soft);
                 flex-shrink: 0;
             }
@@ -675,10 +833,10 @@ limitations under the License.
                 border: none;
                 color: var(--ink-dim);
                 font-family: inherit;
-                font-size: 11.5px;
+                font-size: 12.5px;
                 font-weight: 500;
                 letter-spacing: 0.3px;
-                padding: 8px 4px 10px;
+                padding: 9px 4px 11px;
                 cursor: pointer;
                 transition: color 0.15s;
                 border-radius: 6px 6px 0 0;
@@ -708,7 +866,7 @@ limitations under the License.
             #vp-autoplayer-gui .vp-tab-panel {
                 display: none;
                 flex-direction: column;
-                padding: 12px;
+                padding: 14px;
                 overflow-y: auto;
                 flex: 1;
                 min-height: 0;
@@ -718,15 +876,15 @@ limitations under the License.
             #vp-autoplayer-gui .vp-status-row {
                 display: flex;
                 align-items: center;
-                gap: 8px;
-                padding: 7px 10px;
+                gap: 9px;
+                padding: 9px 12px;
                 background: var(--bg-2);
                 border: 1px solid var(--line);
-                border-radius: 6px;
-                margin-bottom: 10px;
+                border-radius: 7px;
+                margin-bottom: 12px;
             }
             #vp-autoplayer-gui .vp-status-dot {
-                width: 8px; height: 8px; border-radius: 50%;
+                width: 9px; height: 9px; border-radius: 50%;
                 background: var(--ink-dim);
                 flex-shrink: 0;
                 transition: background 0.3s ease;
@@ -738,63 +896,103 @@ limitations under the License.
                 0%, 100% { box-shadow: 0 0 0 0 rgba(46,204,113,0.55); }
                 50% { box-shadow: 0 0 0 5px rgba(46,204,113,0); }
             }
-            #vp-autoplayer-gui .status { flex: 1; color: var(--ink); font-size: 12px; }
+            #vp-autoplayer-gui .status { flex: 1; color: var(--ink); font-size: 13px; }
 
             #vp-autoplayer-gui .vp-section-label {
-                font-size: 10.5px;
+                font-size: 11px;
                 letter-spacing: 1px;
                 text-transform: uppercase;
                 color: var(--ink-dim);
-                margin: 2px 0 7px;
+                margin: 2px 0 8px;
             }
 
-            #vp-autoplayer-gui textarea {
+            #vp-autoplayer-gui .vp-sheet-wrap {
+                position: relative;
                 width: 100%;
-                height: 88px;
+                height: 110px;
+            }
+            #vp-autoplayer-gui textarea#vp-sheet {
+                width: 100%;
+                height: 100%;
                 background: var(--bg-2);
                 border: 1px solid var(--line);
-                border-radius: 6px;
+                border-radius: 7px;
                 color: var(--ink);
-                padding: 8px;
+                padding: 10px;
                 font-family: 'SFMono-Regular', Consolas, monospace;
-                font-size: 12px;
-                resize: vertical;
+                font-size: 13px;
+                resize: none;
+                display: block;
             }
-            #vp-autoplayer-gui textarea:focus { outline: none; border-color: var(--brass); }
-            #vp-autoplayer-gui textarea::placeholder { color: var(--ink-dim); }
+            #vp-autoplayer-gui textarea#vp-sheet:focus { outline: none; border-color: var(--brass); }
+            #vp-autoplayer-gui textarea#vp-sheet::placeholder { color: var(--ink-dim); }
+
+            #vp-autoplayer-gui .vp-sheet-highlight {
+                display: none;
+                position: absolute;
+                inset: 0;
+                background: var(--bg-2);
+                border: 1px solid var(--line);
+                border-radius: 7px;
+                padding: 10px;
+                font-family: 'SFMono-Regular', Consolas, monospace;
+                font-size: 13px;
+                line-height: 1.55;
+                overflow: auto;
+                white-space: pre-wrap;
+                word-break: break-word;
+                color: var(--ink);
+            }
+            #vp-autoplayer-gui .vp-sheet-highlight .token {
+                color: var(--ink);
+                margin-right: 3px;
+                display: inline-block;
+            }
+            #vp-autoplayer-gui .vp-sheet-highlight .token.done {
+                color: var(--ink-dim);
+                opacity: 0.4;
+            }
+            #vp-autoplayer-gui .vp-sheet-highlight .token.now {
+                color: #0d0a04;
+                background: var(--brass-bright);
+                border-radius: 3px;
+                padding: 0 3px;
+                font-weight: 600;
+            }
 
             #vp-autoplayer-gui .vp-sheet-actions {
                 display: flex;
                 align-items: center;
-                gap: 6px;
-                margin-top: 6px;
+                gap: 7px;
+                margin-top: 8px;
             }
             #vp-autoplayer-gui .vp-mini-btn {
                 background: transparent;
                 border: 1px solid var(--line);
                 color: var(--ink-dim);
                 border-radius: 5px;
-                padding: 3px 8px;
-                font-size: 11px;
+                padding: 4px 9px;
+                font-size: 12px;
                 cursor: pointer;
             }
             #vp-autoplayer-gui .vp-mini-btn:hover { color: var(--ink); border-color: var(--brass); }
-            #vp-autoplayer-gui .vp-char-count { margin-left: auto; font-size: 11px; color: var(--ink-dim); }
+            #vp-autoplayer-gui .vp-char-count { margin-left: auto; font-size: 12px; color: var(--ink-dim); }
 
             #vp-autoplayer-gui .row {
                 display: flex;
                 gap: 8px;
-                margin-top: 10px;
+                margin-top: 12px;
                 align-items: center;
             }
-            #vp-autoplayer-gui .row label { display: flex; align-items: center; gap: 5px; color: var(--ink-dim); font-size: 12px; }
+            #vp-autoplayer-gui .row label { display: flex; align-items: center; gap: 6px; color: var(--ink-dim); font-size: 13px; }
             #vp-autoplayer-gui input[type="number"] {
-                width: 56px;
+                width: 58px;
                 background: var(--bg-2);
                 border: 1px solid var(--line);
                 border-radius: 5px;
                 color: var(--ink);
-                padding: 5px 6px;
+                padding: 6px 7px;
+                font-size: 13px;
             }
             #vp-autoplayer-gui input[type="number"]:focus,
             #vp-autoplayer-gui input[type="checkbox"]:focus-visible { outline: 1px solid var(--brass); }
@@ -808,10 +1006,10 @@ limitations under the License.
                 background: var(--bg-2);
                 border: 1px solid var(--line);
                 color: var(--ink);
-                border-radius: 6px;
-                padding: 8px 6px;
+                border-radius: 7px;
+                padding: 10px 8px;
                 cursor: pointer;
-                font-size: 12px;
+                font-size: 13px;
                 transition: border-color 0.15s, transform 0.1s, background 0.15s;
             }
             #vp-autoplayer-gui button.vp-btn:hover { border-color: var(--brass); transform: translateY(-1px); }
@@ -822,12 +1020,12 @@ limitations under the License.
                 color: #0d140f;
                 font-weight: 600;
             }
-            #vp-autoplayer-gui button.vp-btn.small { flex: 0 0 40px; }
+            #vp-autoplayer-gui button.vp-btn.small { flex: 0 0 42px; }
 
-            #vp-autoplayer-gui .progress-wrap { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+            #vp-autoplayer-gui .progress-wrap { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
             #vp-autoplayer-gui .progress {
                 flex: 1;
-                height: 5px;
+                height: 6px;
                 background: var(--bg-2);
                 border-radius: 3px;
                 overflow: hidden;
@@ -839,47 +1037,24 @@ limitations under the License.
                 transition: width 0.15s;
             }
             #vp-autoplayer-gui .vp-progress-label {
-                font-size: 11px;
+                font-size: 12px;
                 color: var(--ink-dim);
-                min-width: 34px;
+                min-width: 36px;
                 text-align: right;
                 font-variant-numeric: tabular-nums;
             }
 
             #vp-autoplayer-gui .clock {
-                margin-top: 6px;
+                margin-top: 7px;
                 text-align: right;
-                font-size: 11px;
+                font-size: 12px;
                 color: var(--ink-dim);
                 font-variant-numeric: tabular-nums;
             }
 
-            #vp-autoplayer-gui .vp-help-panel {
-                padding: 0;
-                font-size: 11.5px;
-            }
-            #vp-autoplayer-gui .vp-hk-row {
-                display: flex;
-                justify-content: space-between;
-                gap: 10px;
-                padding: 6px 2px;
-                color: var(--ink-dim);
-                border-bottom: 1px dashed var(--line);
-            }
-            #vp-autoplayer-gui .vp-hk-row:last-child { border-bottom: none; }
-            #vp-autoplayer-gui .vp-hk-keys { color: var(--ink); text-align: right; }
-            #vp-autoplayer-gui kbd {
-                background: var(--bg-1);
-                border: 1px solid var(--line);
-                border-radius: 4px;
-                padding: 1px 5px;
-                font-size: 10.5px;
-                font-family: inherit;
-            }
-
             #vp-autoplayer-gui .hint {
-                margin-top: 12px;
-                font-size: 10.5px;
+                margin-top: 14px;
+                font-size: 11px;
                 color: var(--ink-dim);
                 line-height: 1.4;
                 text-align: center;
@@ -891,15 +1066,15 @@ limitations under the License.
             #vp-autoplayer-gui .vp-setting-card {
                 background: var(--bg-2);
                 border: 1px solid var(--line);
-                border-radius: 6px;
-                padding: 10px;
-                margin-bottom: 9px;
+                border-radius: 7px;
+                padding: 12px;
+                margin-bottom: 10px;
             }
             #vp-autoplayer-gui .vp-setting-desc {
-                font-size: 10.5px;
+                font-size: 11.5px;
                 color: var(--ink-dim);
-                margin-top: 4px;
-                line-height: 1.4;
+                margin-top: 5px;
+                line-height: 1.45;
             }
 
             #vp-autoplayer-gui .vp-tab-panel.vp-sheets-panel { padding: 0; }
@@ -907,13 +1082,13 @@ limitations under the License.
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 9px 12px;
+                padding: 10px 14px;
                 border-bottom: 1px solid var(--line);
                 flex-shrink: 0;
             }
             #vp-autoplayer-gui .vp-sheets-toolbar .vp-sheets-site {
                 flex: 1;
-                font-size: 11px;
+                font-size: 12px;
                 color: var(--ink-dim);
                 font-family: 'SFMono-Regular', Consolas, monospace;
                 overflow: hidden;
@@ -922,7 +1097,7 @@ limitations under the License.
             }
             #vp-autoplayer-gui .vp-sheets-frame-wrap {
                 flex: 1;
-                min-height: 220px;
+                min-height: 240px;
                 position: relative;
                 background: #fff;
             }
@@ -934,8 +1109,8 @@ limitations under the License.
             }
             #vp-autoplayer-gui .vp-sheets-note {
                 flex-shrink: 0;
-                padding: 7px 12px;
-                font-size: 10.5px;
+                padding: 9px 14px;
+                font-size: 11.5px;
                 color: var(--ink-dim);
                 border-top: 1px solid var(--line);
                 background: var(--bg-1);
@@ -957,12 +1132,12 @@ limitations under the License.
             <div class="vp-header">
                 <div class="vp-title-wrap">
                     <span class="vp-clef">𝄞</span>
-                    <span class="vp-title" style="font-size: 16px;">Autoverse</span>
+                    <span class="vp-title">Autoverse</span>
                     <span class="vp-mini-dot" id="vp-mini-dot"></span>
                 </div>
                 <div class="vp-header-btns">
                     <button id="vp-min" title="Minimize">–</button>
-                    <button id="vp-close" title="Hide (F8)">×</button>
+                    <button id="vp-close" title="Hide">×</button>
                 </div>
             </div>
             <div class="vp-keystrip" id="vp-keystrip"></div>
@@ -970,7 +1145,6 @@ limitations under the License.
                 <button class="vp-tab-btn active" data-tab="player">Player</button>
                 <button class="vp-tab-btn" data-tab="settings">Settings</button>
                 <button class="vp-tab-btn" data-tab="sheets">Sheets</button>
-                <button class="vp-tab-btn" data-tab="help">Help</button>
             </div>
             <div class="vp-body">
 
@@ -980,7 +1154,10 @@ limitations under the License.
                         <span class="status" id="vp-status">Ready</span>
                     </div>
 
-                    <textarea id="vp-sheet" placeholder="Paste your sheet music here…&#10;[q w e] {r t y} etc.">${saved && saved.sheetText ? saved.sheetText : ''}</textarea>
+                    <div class="vp-sheet-wrap" id="vp-sheet-wrap">
+                        <textarea id="vp-sheet" placeholder="Paste your sheet music here…&#10;[q w e] {r t y} etc.">${saved && saved.sheetText ? saved.sheetText : ''}</textarea>
+                        <div class="vp-sheet-highlight" id="vp-sheet-highlight"></div>
+                    </div>
                     <div class="vp-sheet-actions">
                         <button class="vp-mini-btn" id="vp-copy" title="Copy sheet text to clipboard">Copy</button>
                         <button class="vp-mini-btn" id="vp-paste" title="Paste sheet text from clipboard">Paste</button>
@@ -989,15 +1166,15 @@ limitations under the License.
                     </div>
 
                     <div class="row">
-                        <button class="vp-btn" id="vp-play" title="Play sheet or MIDI (${config.hotkeys.autoplay.join('/')})">Play</button>
-                        <button class="vp-btn" id="vp-manual" title="Step through with any keypress (${config.hotkeys.manual.join('/')})">Manual</button>
-                        <button class="vp-btn" id="vp-throttle" title="Step through MIDI, one press at a time (${config.hotkeys.midithrottle.join('/')})">Throttle</button>
+                        <button class="vp-btn" id="vp-play" title="Play sheet or MIDI">Play</button>
+                        <button class="vp-btn" id="vp-manual" title="Step through with any keypress">Manual</button>
+                        <button class="vp-btn" id="vp-throttle" title="Step through MIDI one press at a time">Throttle</button>
                     </div>
                     <div class="row">
-                        <button class="vp-btn" id="vp-midi" title="Load a .mid file (${config.hotkeys.loadmidi.join('/')})">Load MIDI</button>
-                        <button class="vp-btn" id="vp-reset" title="Reset playback position (${config.hotkeys.reset.join('/')})">Reset</button>
-                        <button class="vp-btn small" id="vp-trans-down" title="Transpose −1 (${config.hotkeys.transposeDown.join('/')})">−1</button>
-                        <button class="vp-btn small" id="vp-trans-up" title="Transpose +1 (${config.hotkeys.transposeUp.join('/')})">+1</button>
+                        <button class="vp-btn" id="vp-midi" title="Load a .mid file">Load MIDI</button>
+                        <button class="vp-btn" id="vp-reset" title="Reset playback position">Reset</button>
+                        <button class="vp-btn small" id="vp-trans-down" title="Transpose -1">-1</button>
+                        <button class="vp-btn small" id="vp-trans-up" title="Transpose +1">+1</button>
                     </div>
 
                     <div class="progress-wrap">
@@ -1009,25 +1186,39 @@ limitations under the License.
                 </div>
 
                 <div class="vp-tab-panel" data-panel="settings">
-                    <div class="vp-section-label">Tempo &amp; Playback</div>
+                    <div class="vp-section-label">Playback</div>
                     <div class="vp-setting-card">
                         <div class="row" style="margin-top:0">
                             <label>BPM <input type="number" id="vp-bpm" value="${saved && saved.bpm ? saved.bpm : 120}" min="20" max="400"></label>
                             <input type="range" id="vp-bpm-slider" min="20" max="400" value="${saved && saved.bpm ? saved.bpm : 120}">
                         </div>
-                        <div class="vp-setting-desc">Controls the pace of sheet playback. MIDI files use their own embedded tempo instead.</div>
+                        <div class="vp-setting-desc">Controls the pace of sheet playback. MIDI files use their own tempo.</div>
                     </div>
                     <div class="vp-setting-card">
                         <div class="row" style="margin-top:0">
                             <label><input type="checkbox" id="vp-loop" ${saved && saved.loop ? 'checked' : ''}> Loop when finished</label>
                         </div>
-                        <div class="vp-setting-desc">Restarts the sheet automatically from the top instead of stopping at the end.</div>
+                        <div class="vp-setting-desc">Restarts the sheet from the top instead of stopping.</div>
+                    </div>
+
+                    <div class="vp-section-label" style="margin-top:14px">Hold / Input</div>
+                    <div class="vp-setting-card">
+                        <div class="row" style="margin-top:0">
+                            <label>Repeat each key <input type="number" id="vp-times" value="${saved && saved.times ? saved.times : 1}" min="1" max="8" style="width:48px"></label>
+                        </div>
+                        <div class="vp-setting-desc">Fires every key this many times, spaced a few ms apart.</div>
                     </div>
                     <div class="vp-setting-card">
                         <div class="row" style="margin-top:0">
-                            <label>Repeat each key <input type="number" id="vp-times" value="${saved && saved.times ? saved.times : 1}" min="1" max="8" style="width:44px"></label>
+                            <label>Normal hold <input type="number" id="vp-release" value="${config.release}" min="10" max="500" style="width:52px"> ms</label>
                         </div>
-                        <div class="vp-setting-desc">Fires every keypress this many times, spaced a few ms apart and is useful on stubborn inputs.</div>
+                        <div class="vp-setting-desc">How long each note stays down normally.</div>
+                    </div>
+                    <div class="vp-setting-card">
+                        <div class="row" style="margin-top:0">
+                            <label>Shift hold <input type="number" id="vp-sustain" value="${config.sustain}" min="50" max="1000" style="width:52px"> ms</label>
+                        </div>
+                        <div class="vp-setting-desc">Hold Left Shift while playing to keep notes down this long.</div>
                     </div>
                     ${FOOTER_HTML}
                 </div>
@@ -1041,15 +1232,7 @@ limitations under the License.
                     <div class="vp-sheets-frame-wrap">
                         <iframe class="vp-sheets-iframe" id="vp-sheets-iframe" referrerpolicy="no-referrer"></iframe>
                     </div>
-                    <div class="vp-sheets-note">Copy a sheet on the site, then switch to the <b>Player</b> tab and hit <b>Paste</b>. Some sites block embedding so <b>Open in tab</b> if it stays blank.</div>
-                </div>
-
-                <div class="vp-tab-panel" data-panel="help">
-                    <div class="vp-section-label">Hotkeys</div>
-                    <div class="vp-help-panel" id="vp-help-panel">
-                        ${renderHotkeyList()}
-                    </div>
-                    ${FOOTER_HTML}
+                    <div class="vp-sheets-note">Copy a sheet on the site, then switch to the <b>Player</b> tab and hit <b>Paste</b>. Some sites block embedding so use <b>Open in tab</b> if it stays blank.</div>
                 </div>
 
             </div>
@@ -1083,12 +1266,28 @@ limitations under the License.
         clockEl = gui.querySelector('#vp-clock');
         charCountEl = gui.querySelector('#vp-char-count');
         sheetsIframe = gui.querySelector('#vp-sheets-iframe');
+        sheetHighlight = gui.querySelector('#vp-sheet-highlight');
 
         if (saved && saved.sheetText) sheets = beaut(saved.sheetText);
         if (saved && saved.bpm) lastBPM = Math.max(20, Math.min(400, saved.bpm));
         if (saved && saved.loop) config.loop = true;
         if (saved && saved.times) config.times = Math.max(1, Math.min(8, saved.times));
         updateCharCount();
+
+        const releaseInput = gui.querySelector('#vp-release');
+        const sustainInput = gui.querySelector('#vp-sustain');
+        if (releaseInput) {
+            releaseInput.onchange = () => {
+                config.release = Math.max(10, Math.min(500, parseInt(releaseInput.value) || 35));
+                releaseInput.value = config.release;
+            };
+        }
+        if (sustainInput) {
+            sustainInput.onchange = () => {
+                config.sustain = Math.max(50, Math.min(1000, parseInt(sustainInput.value) || 220));
+                sustainInput.value = config.sustain;
+            };
+        }
 
         gui.querySelectorAll('.vp-tab-btn').forEach(btn => {
             const id = btn.dataset.tab;
@@ -1100,7 +1299,23 @@ limitations under the License.
         });
         switchTab(saved && saved.activeTab && tabPanels[saved.activeTab] ? saved.activeTab : 'player');
 
-        gui.querySelector('#vp-min').onclick = () => gui.classList.toggle('minimized');
+        // fixed minimize - actually collapses instead of leaving a giant empty box
+        gui.querySelector('#vp-min').onclick = () => {
+            const goingMin = !gui.classList.contains('minimized');
+            if (goingMin) {
+                gui.dataset.prevHeight = gui.style.height || gui.offsetHeight + 'px';
+                gui.dataset.prevWidth = gui.style.width || '';
+                gui.classList.add('minimized');
+                gui.style.height = 'auto';
+            } else {
+                gui.classList.remove('minimized');
+                if (gui.dataset.prevHeight) {
+                    gui.style.height = gui.dataset.prevHeight;
+                }
+            }
+            saveUIState();
+        };
+
         gui.querySelector('#vp-close').onclick = () => setGuiOpen(false);
 
         gui.querySelector('#vp-sheets-reload').onclick = () => {
@@ -1114,6 +1329,7 @@ limitations under the License.
         sheetArea.addEventListener('change', () => {
             sheets = beaut(sheetArea.value);
             current = 0;
+            clearMidi();
             setStatus('Sheet updated');
             updateProgress();
             saveUIState();
@@ -1126,10 +1342,16 @@ limitations under the License.
             updateCharCount();
         });
 
+        sheetHighlight.addEventListener('click', () => {
+            if (manualMode || autoplayRunning) return;
+            showEditableSheet();
+            sheetArea.focus();
+        });
+
         gui.querySelector('#vp-copy').onclick = async () => {
             try {
                 await navigator.clipboard.writeText(sheetArea.value);
-                setStatus('Sheet copied to clipboard');
+                setStatus('Sheet copied');
             } catch (e) {
                 setStatus('Copy failed.. select manually');
             }
@@ -1144,9 +1366,10 @@ limitations under the License.
                 sheetArea.value = text;
                 sheets = beaut(text);
                 current = 0;
+                clearMidi();
                 updateCharCount();
                 updateProgress();
-                setStatus('Sheet pasted from clipboard');
+                setStatus('Sheet pasted');
                 saveUIState();
             } catch (e) {
                 setStatus('Paste blocked. Use Ctrl+V in the box');
@@ -1156,6 +1379,7 @@ limitations under the License.
             sheetArea.value = '';
             sheets = '';
             current = 0;
+            clearMidi();
             updateCharCount();
             updateProgress();
             setStatus('Sheet cleared');
@@ -1195,9 +1419,11 @@ limitations under the License.
             if (manualMode) {
                 midiThrottleMode = false;
                 if (autoplayRunning) stopAutoplay();
+                if (midiQueue && midiQueue.length && sheets.trim()) clearMidi();
             }
             setStatus(manualMode ? 'Manual mode ON' : 'Manual mode OFF');
             updateButtons();
+            updateSheetHighlight();
         };
         gui.querySelector('#vp-throttle').onclick = () => {
             midiThrottleMode = !midiThrottleMode;
@@ -1209,20 +1435,25 @@ limitations under the License.
             }
             setStatus(midiThrottleMode ? 'Throttle ON' : 'Throttle OFF');
             updateButtons();
+            updateSheetHighlight();
         };
         gui.querySelector('#vp-midi').onclick = loadMidi;
         gui.querySelector('#vp-reset').onclick = resetAll;
         gui.querySelector('#vp-trans-up').onclick = () => {
             sheets = beaut(Increase(sheets, 1));
             sheetArea.value = sheets;
+            clearMidi();
             updateCharCount();
+            updateProgress();
             setStatus('Transposed +1');
         };
         gui.querySelector('#vp-trans-down').onclick = () => {
             sheets = beaut(Increase(sheets, -1));
             sheetArea.value = sheets;
+            clearMidi();
             updateCharCount();
-            setStatus('Transposed −1');
+            updateProgress();
+            setStatus('Transposed -1');
         };
 
         // drag the header around, it doesnt go offscreen i don't think
@@ -1263,6 +1494,53 @@ limitations under the License.
 
         updateProgress();
         updateButtons();
+
+        // start watching the site theme
+        watchTheme();
+    }
+
+    function showEditableSheet() {
+        if (!sheetArea || !sheetHighlight) return;
+        sheetArea.style.display = 'block';
+        sheetHighlight.style.display = 'none';
+    }
+
+    function showHighlightSheet() {
+        if (!sheetArea || !sheetHighlight) return;
+        sheetArea.style.display = 'none';
+        sheetHighlight.style.display = 'block';
+    }
+
+    function updateSheetHighlight() {
+        if (!sheetHighlight || !sheetArea) return;
+
+        if (midiQueue && midiQueue.length && (autoplayRunning || midiThrottleMode)) {
+            showEditableSheet();
+            return;
+        }
+
+        const tokens = sheets ? sheets.split(' ').filter(Boolean) : [];
+        const shouldHighlight = (manualMode || autoplayRunning) && tokens.length > 0;
+
+        if (!shouldHighlight) {
+            showEditableSheet();
+            return;
+        }
+
+        let html = '';
+        for (let i = 0; i < tokens.length; i++) {
+            let cls = 'token';
+            if (i < current) cls += ' done';
+            else if (i === current) cls += ' now';
+            html += '<span class="' + cls + '">' + esc(tokens[i]) + '</span> ';
+        }
+        sheetHighlight.innerHTML = html;
+        showHighlightSheet();
+
+        const nowEl = sheetHighlight.querySelector('.now');
+        if (nowEl) {
+            nowEl.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+        }
     }
 
     function setStatus(msg) {
@@ -1292,19 +1570,32 @@ limitations under the License.
         if (!progressEl) return;
         let pct = 0;
         let frac = '';
+        let statusExtra = '';
+
         if (midiQueue && midiQueue.length) {
             const idx = autoplayRunning ? midiAutoIdx : midiThrottleIndex;
             pct = (idx / midiQueue.length) * 100;
             frac = idx + '/' + midiQueue.length;
+            if (autoplayRunning || midiThrottleMode) statusExtra = idx + ' / ' + midiQueue.length;
         } else if (sheets) {
             const parts = sheets.split(' ').filter(Boolean);
             pct = parts.length ? (current / parts.length) * 100 : 0;
             frac = current + '/' + parts.length;
+            if (autoplayRunning || manualMode) statusExtra = current + ' / ' + parts.length;
         }
+
         pct = Math.min(100, pct);
         progressEl.style.width = pct + '%';
         if (progressLabelEl) progressLabelEl.textContent = Math.round(pct) + '%';
         if (progressLabelEl && frac) progressLabelEl.title = frac;
+
+        if (statusExtra && (autoplayRunning || manualMode || midiThrottleMode)) {
+            if (autoplayRunning) setStatus('Playing  ' + statusExtra);
+            else if (manualMode) setStatus('Manual  ' + statusExtra);
+            else if (midiThrottleMode) setStatus('Throttle  ' + statusExtra);
+        }
+
+        updateSheetHighlight();
     }
 
     function updateButtons() {
@@ -1327,7 +1618,6 @@ limitations under the License.
         updateToolbarButtonState(open);
     }
 
-    // button in the site toolbar
     let toolbarBtnEl = null;
 
     function findPianoverseToolbar() {
@@ -1345,7 +1635,7 @@ limitations under the License.
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'item compact vp-toolbar-autoplayer-btn';
-        btn.title = 'Toggle Autoverse (F8)';
+        btn.title = 'Toggle Autoverse';
         btn.innerHTML = `
             <i class="icon fas fa-music" aria-hidden="true"></i>
             <span class="stack">
@@ -1381,24 +1671,30 @@ limitations under the License.
     const toolbarObserver = new MutationObserver(() => injectPianoverseToolbarButton());
     toolbarObserver.observe(document.documentElement, { childList: true, subtree: true });
 
-    function isHotkey(key) {
-        return Object.values(config.hotkeys).some(arr => arr.includes(key));
-    }
+    // track left/right shift so we can lengthen notes while its held
+    window.addEventListener('keydown', e => {
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            shiftHeld = true;
+        }
+    }, true);
+    window.addEventListener('keyup', e => {
+        if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+            shiftHeld = false;
+        }
+    }, true);
 
     // block regular keys while in manual / throttle so the site doesnt also hear them
     ['keydown', 'keypress', 'keyup'].forEach(evtType => {
         window.addEventListener(evtType, e => {
             if (!e.isTrusted || e.repeat) return;
 
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === 'Shift') return;
+
             const inManual = manualMode;
             const inThrottle = midiThrottleMode;
             const inAutoplay = autoplayRunning;
 
             if (!inManual && !inThrottle && !inAutoplay) return;
-
-            if (inAutoplay && config.hotkeys.autoplay.includes(e.key)) return;
-            if (inThrottle && config.hotkeys.midithrottle.includes(e.key)) return;
-            if (inManual && isHotkey(e.key)) return;
 
             e.preventDefault();
             e.stopImmediatePropagation();
@@ -1409,86 +1705,6 @@ limitations under the License.
             }
         }, true);
     });
-
-    window.addEventListener('keydown', e => {
-        if (!e.isTrusted || e.repeat) return;
-
-        if (config.hotkeys.toggleGui.includes(e.key)) {
-            e.preventDefault();
-            if (gui) {
-                setGuiOpen(gui.style.display === 'none');
-            }
-            return;
-        }
-
-        if (config.hotkeys.manual.includes(e.key)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            manualMode = !manualMode;
-            if (manualMode) {
-                midiThrottleMode = false;
-                if (autoplayRunning) stopAutoplay();
-            }
-            setStatus(manualMode ? 'Manual ON' : 'Manual OFF');
-            updateButtons();
-            return;
-        }
-
-        if (config.hotkeys.midithrottle.includes(e.key)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            midiThrottleMode = !midiThrottleMode;
-            if (midiThrottleMode) {
-                manualMode = false;
-                if (autoplayRunning) stopAutoplay();
-                midiThrottlePending = false;
-                midiThrottleLastAt = 0;
-            }
-            setStatus(midiThrottleMode ? 'Throttle ON' : 'Throttle OFF');
-            updateButtons();
-            return;
-        }
-
-        if (config.hotkeys.autoplay.includes(e.key)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            manualMode = false;
-            midiThrottleMode = false;
-            if (midiQueue && midiQueue.length) startMidiAutoplay();
-            else startSheetAutoplay();
-            return;
-        }
-
-        if (config.hotkeys.loadmidi.includes(e.key)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            loadMidi();
-            return;
-        }
-
-        if (config.hotkeys.reset.includes(e.key)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            resetAll();
-            return;
-        }
-
-        if (config.hotkeys.transposeUp.includes(e.key)) {
-            e.preventDefault();
-            sheets = beaut(Increase(sheets, 1));
-            if (sheetArea) sheetArea.value = sheets;
-            setStatus('Transposed +1');
-            return;
-        }
-
-        if (config.hotkeys.transposeDown.includes(e.key)) {
-            e.preventDefault();
-            sheets = beaut(Increase(sheets, -1));
-            if (sheetArea) sheetArea.value = sheets;
-            setStatus('Transposed −1');
-            return;
-        }
-    }, true);
 
     function init() {
         createGUI();
